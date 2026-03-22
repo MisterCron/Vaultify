@@ -13,6 +13,7 @@ from config import Config
 from database import Database
 from handlers import register_handlers
 from services.notification import NotificationService
+from middlewares.delete_user_message import create_delete_user_message_handler
 
 # Настройка логирования
 logging.basicConfig(
@@ -65,6 +66,9 @@ async def run_bot():
 
     # Инициализация сервиса уведомлений
     notification_service = NotificationService(bot=application.bot)
+
+    # Регистрация обработчика для удаления сообщений пользователя (группа -1 = до всех остальных)
+    application.add_handler(create_delete_user_message_handler(notification_service, delay=5), group=-1)
 
     # Регистрация обработчиков
     register_handlers(application, db, notification_service)
