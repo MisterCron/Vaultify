@@ -5,20 +5,18 @@ from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 from config import Config
 from helpers import check_authorization
-import asyncio
+from services.notification import NotificationService
 
 
-def create_cancel_handler(db):
+def create_cancel_handler(db, notification_service: NotificationService):
     """Создаёт обработчик команды /cancel"""
 
     async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
-            msg = await update.message.reply_text('❌ Доступ запрещён')
-            await asyncio.sleep(5)
-            try:
-                await msg.delete()
-            except:
-                pass
+            await notification_service.notify(
+                chat_id=update.effective_chat.id,
+                text='❌ Доступ запрещён',
+            )
             return
 
         context.user_data['awaiting_box_create'] = False
@@ -35,11 +33,9 @@ def create_cancel_handler(db):
         context.user_data['awaiting_box_select'] = False
         context.user_data['awaiting_menu_find'] = False
 
-        msg = await update.message.reply_text('❌ Действие отменено')
-        await asyncio.sleep(5)
-        try:
-            await msg.delete()
-        except:
-            pass
+        await notification_service.notify(
+            chat_id=update.effective_chat.id,
+            text='❌ Действие отменено',
+        )
 
     return CommandHandler('cancel', cancel)

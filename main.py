@@ -12,6 +12,7 @@ from telegram.error import TelegramError
 from config import Config
 from database import Database
 from handlers import register_handlers
+from services.notification import NotificationService
 
 # Настройка логирования
 logging.basicConfig(
@@ -62,21 +63,24 @@ async def run_bot():
     # Создание приложения
     application = Application.builder().token(Config.BOT_TOKEN).build()
 
+    # Инициализация сервиса уведомлений
+    notification_service = NotificationService(bot=application.bot)
+
     # Регистрация обработчиков
-    register_handlers(application, db)
+    register_handlers(application, db, notification_service)
 
     # Запуск бота и отправка уведомления
     logger.info('Бот запущен...')
 
     await application.initialize()
     await application.start()
-    
+
     # Отправка уведомления администратору после запуска
     try:
         await notify_admin(application.bot, db)
     except Exception as e:
         logger.error(f'Ошибка при отправке уведомления: {e}')
-    
+
     await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
 
     # Keep running until stopped

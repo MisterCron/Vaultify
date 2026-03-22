@@ -31,15 +31,15 @@ from keyboards import (
     get_main_menu_back_keyboard,
 )
 from messages import format_box_text, format_item_text, format_items_list, format_delete_box_warning
-from helpers import edit_safe, delete_message_background
+from helpers import edit_safe
+from services.notification import NotificationService
 import logging
-import asyncio
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
-def create_callback_handler(db: Database):
+def create_callback_handler(db: Database, notification_service: NotificationService):
     """Создаёт обработчик callback-запросов"""
 
     async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,17 +160,24 @@ def create_callback_handler(db: Database):
                 created_by = f'{user_display} ({created_at})'
 
                 db.create_item(name=item_name, box_id=box_id, created_by=created_by)
-                
+
                 # Экранируем HTML символы в названии предмета
                 safe_item_name = item_name.replace('<', '&lt;').replace('>', '&gt;')
-                
-                # Отправляем подтверждение и удаляем его в фоне
-                await edit_safe(query, f'✅ Предмет "{safe_item_name}" добавлен в бокс "{box.name}"')
-                await asyncio.sleep(3)
-                try:
-                    await query.message.delete()
-                except:
-                    pass
+
+                # Возвращаемся к меню боксов
+                boxes = db.get_all_boxes()
+                items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes} if boxes else {}
+                await edit_safe(
+                    query,
+                    '📦 Выберите бокс для управления:',
+                    reply_markup=get_boxes_keyboard(boxes, items_counts)
+                )
+
+                # Отправляем подтверждение через сервис уведомлений
+                await notification_service.notify_success(
+                    chat_id=query.message.chat_id,
+                    action=f'Предмет "{safe_item_name}" добавлен в бокс "{box.name}"',
+                )
 
                 context.user_data['add_item_name'] = None
                 context.user_data['awaiting_box_select'] = False
@@ -284,27 +291,24 @@ def create_callback_handler(db: Database):
 
             box_id = item.box_id
             db.delete_item(item_id)
-            
+
             # Возвращаемся к боксу
             box = db.get_box_by_id(box_id)
             items = db.get_items_by_box(box_id)
-            
-            # Сначала редактируем сообщение с клавиатурой бокса
+
+            # Редактируем сообщение с клавиатурой бокса
             await edit_safe(
                 query,
                 format_box_text(box, len(items)),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
-            
-            # Затем отправляем сообщение об удалении и удаляем его в фоне
-            confirm_msg = await query.message.reply_text('🗑️ Предмет удалён')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                query.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
+
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify(
+                chat_id=query.message.chat_id,
+                text='🗑️ Предмет удалён',
+            )
 
         # Удаление бокса (подтверждение)
         elif data.startswith(DELETE_BOX_PREFIX) and not data.startswith(DELETE_BOX_CONFIRM_PREFIX):
@@ -338,26 +342,23 @@ def create_callback_handler(db: Database):
                 return
 
             db.delete_box(box_id)
-            
+
             # Возвращаемся к списку боксов
             boxes = db.get_all_boxes()
             items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes} if boxes else {}
-            
-            # Сначала редактируем сообщение с клавиатурой списка боксов
+
+            # Редактируем сообщение с клавиатурой списка боксов
             await edit_safe(
                 query,
                 '📦 Выберите бокс для управления:',
                 reply_markup=get_boxes_keyboard(boxes, items_counts)
             )
-            
-            # Затем отправляем сообщение об удалении и удаляем его в фоне
-            confirm_msg = await query.message.reply_text('🗑️ Бокс удалён')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                query.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
+
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify(
+                chat_id=query.message.chat_id,
+                text='🗑️ Бокс удалён',
+            )
 
         # Отмена редактирования бокса
         elif data == CANCEL_EDIT_BOX:
@@ -418,7 +419,7 @@ def create_callback_handler(db: Database):
             item = db.get_item_by_id(item_id)
             box = db.get_box_by_id(item.box_id)
 
-            # Сначала редактируем сообщение с меню предмета
+            # Редактируем сообщение с меню предмета
             await edit_safe(
                 query,
                 format_item_text(item, box),
@@ -426,13 +427,11 @@ def create_callback_handler(db: Database):
                 parse_mode='HTML'
             )
 
-            # Затем отправляем подтверждение и удаляем его через 3 секунды
-            confirm_msg = await query.message.reply_text('✅ Комментарий удалён!')
-            await asyncio.sleep(3)
-            try:
-                await confirm_msg.delete()
-            except:
-                pass
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify(
+                chat_id=query.message.chat_id,
+                text='✅ Комментарий удалён!',
+            )
 
             context.user_data['edit_item_comment_id'] = None
             context.user_data['edit_item_box_id'] = None

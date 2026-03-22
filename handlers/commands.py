@@ -8,11 +8,12 @@ from config import Config
 from constants import ADD_TO_BOX_PREFIX, CANCEL_ADD_ITEM, CREATE_BOX
 from keyboards import get_main_menu_keyboard, get_boxes_keyboard
 from messages import format_welcome_text, format_items_list, format_box_already_exists
-from helpers import check_authorization, delete_user_message, send_and_delete
+from helpers import check_authorization
+from services.notification import NotificationService
 import asyncio
 
 
-def create_start_handler(db: Database):
+def create_start_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /start"""
     async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -24,12 +25,10 @@ def create_start_handler(db: Database):
             reply_markup=get_main_menu_keyboard()
         )
 
-        await delete_user_message(update)
-
     return CommandHandler('start', start)
 
 
-def create_menu_handler(db: Database):
+def create_menu_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /menu"""
     async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -41,12 +40,10 @@ def create_menu_handler(db: Database):
             reply_markup=get_main_menu_keyboard()
         )
 
-        await delete_user_message(update)
-
     return CommandHandler('menu', menu)
 
 
-def create_add_handler(db: Database):
+def create_add_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /add"""
     async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -83,12 +80,10 @@ def create_add_handler(db: Database):
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
-        await delete_user_message(update)
-
     return CommandHandler('add', add)
 
 
-def create_find_handler(db: Database):
+def create_find_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /find"""
     async def find(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -110,12 +105,10 @@ def create_find_handler(db: Database):
 
         await update.message.reply_text(format_search_results(items, db))
 
-        await delete_user_message(update)
-
     return CommandHandler('find', find)
 
 
-def create_list_handler(db: Database):
+def create_list_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /list"""
     async def list_items(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -130,12 +123,10 @@ def create_list_handler(db: Database):
 
         await update.message.reply_text(format_items_list(boxes, db))
 
-        await delete_user_message(update)
-
     return CommandHandler('list', list_items)
 
 
-def create_newbox_handler(db: Database):
+def create_newbox_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /newbox для создания бокса"""
     async def newbox(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -158,12 +149,10 @@ def create_newbox_handler(db: Database):
         db.create_box(name=name)
         await update.message.reply_text(f'✅ Бокс "{name}" создан!')
 
-        await delete_user_message(update)
-
     return CommandHandler('newbox', newbox)
 
 
-def create_box_handler(db: Database):
+def create_box_handler(db: Database, notification_service: NotificationService = None):
     """Обработчик команды /box с inline-кнопками"""
     async def box_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not check_authorization(update):
@@ -174,7 +163,7 @@ def create_box_handler(db: Database):
 
         if not boxes:
             await update.message.reply_text(
-                '📦 Нет созданных боксов.\nСначала создайте бокс в базе данных.'
+                '📦 Нет созданных боксов.\nСначала создайте бокс через /newbox'
             )
             return
 
@@ -184,7 +173,5 @@ def create_box_handler(db: Database):
             '📦 Выберите бокс для управления:',
             reply_markup=get_boxes_keyboard(boxes, items_counts, show_main_menu=False)
         )
-
-        await delete_user_message(update)
 
     return CommandHandler('box', box_menu)

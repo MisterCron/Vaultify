@@ -14,7 +14,8 @@ from messages import (
     format_item_already_exists,
     format_box_already_exists,
 )
-from helpers import check_authorization, send_and_delete, delete_user_message, delete_message_background
+from helpers import check_authorization
+from services.notification import NotificationService
 import asyncio
 from datetime import datetime
 import logging
@@ -22,7 +23,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def create_user_message_handler(db: Database):
+def create_user_message_handler(db: Database, notification_service: NotificationService):
     """Создаёт обработчик текстовых сообщений"""
 
     async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -45,12 +46,18 @@ def create_user_message_handler(db: Database):
             context.user_data['awaiting_box_select'] = False
             context.user_data['awaiting_item_name'] = False
             context.user_data['add_item_box_id'] = None
-            await send_and_delete(update.message, '❌ Действие отменено')
+            await notification_service.notify(
+                chat_id=update.effective_chat.id,
+                text='❌ Действие отменено',
+            )
             return
 
         # Выбор бокса для предмета (если пользователь написал текст вместо нажатия кнопки)
         if context.user_data.get('awaiting_box_select'):
-            await send_and_delete(update.message, '📝 Пожалуйста, выберите бокс из предложенных кнопок ниже.\nДля отмены: /cancel')
+            await notification_service.notify(
+                chat_id=update.effective_chat.id,
+                text='📝 Пожалуйста, выберите бокс из предложенных кнопок ниже.\nДля отмены: /cancel',
+            )
             return
 
         # Поиск предмета из меню
@@ -60,19 +67,10 @@ def create_user_message_handler(db: Database):
 
                 if not items:
                     # Отправляем сообщение об ошибке
-                    error_msg = await update.message.reply_text(format_not_found(text))
-
-                    # Удаляем оба сообщения через 5 секунд
-                    await asyncio.sleep(5)
-                    try:
-                        await update.message.delete()
-                    except:
-                        pass
-                    try:
-                        await error_msg.delete()
-                    except:
-                        pass
-
+                    await notification_service.notify(
+                        chat_id=update.effective_chat.id,
+                        text=format_not_found(text),
+                    )
                     context.user_data['awaiting_menu_find'] = False
                     return
 
@@ -80,18 +78,13 @@ def create_user_message_handler(db: Database):
                     format_search_results(items, db),
                     reply_markup=get_main_menu_back_keyboard()
                 )
-
-                # Удаляем сообщение пользователя в фоне
-                asyncio.create_task(delete_message_background(
-                    context.bot,
-                    update.message.chat_id,
-                    update.message.message_id,
-                    delay=5
-                ))
                 context.user_data['awaiting_menu_find'] = False
             except Exception as e:
                 logger.error(f'Ошибка при поиске: {e}')
-                await update.message.reply_text('❌ Ошибка при поиске')
+                await notification_service.notify(
+                    chat_id=update.effective_chat.id,
+                    text='❌ Ошибка при поиске',
+                )
             return
 
         # Создание бокса
@@ -100,7 +93,10 @@ def create_user_message_handler(db: Database):
 
             existing = db.get_box_by_name(name)
             if existing:
-                await send_and_delete(update.message, format_box_already_exists(name))
+                await notification_service.notify_error(
+                    chat_id=update.effective_chat.id,
+                    error=format_box_already_exists(name),
+                )
                 return
 
             db.create_box(name=name)
@@ -108,22 +104,18 @@ def create_user_message_handler(db: Database):
             boxes = db.get_all_boxes()
             items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes}
 
-            # Сначала отправляем список боксов
+            # Отправляем список боксов
             await update.message.reply_text(
                 '📦 Выберите бокс для управления:',
                 reply_markup=get_boxes_keyboard(boxes, items_counts)
             )
 
-            # Затем отправляем подтверждение и удаляем его в фоне
-            confirm_msg = await update.message.reply_text(f'✅ Бокс "{name}" создан!')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                update.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify_success(
+                chat_id=update.effective_chat.id,
+                action=f'Бокс "{name}" создан',
+            )
 
-            await delete_user_message(update)
             context.user_data['awaiting_box_create'] = False
             return
 
@@ -178,23 +170,18 @@ def create_user_message_handler(db: Database):
             # Экранируем HTML символы в названии предмета
             safe_item_name = item_name.replace('<', '&lt;').replace('>', '&gt;')
 
-            # Сначала отправляем меню бокса
+            # Отправляем меню бокса
             await update.message.reply_text(
                 format_box_text(box, len(items)),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
 
-            # Затем отправляем подтверждение и удаляем его в фоне
-            confirm_msg = await update.message.reply_text(f'✅ Предмет "{safe_item_name}" добавлен!')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                update.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
-
-            await delete_user_message(update)
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify_success(
+                chat_id=update.effective_chat.id,
+                action=f'Предмет "{safe_item_name}" добавлен',
+            )
 
             request_msg_id = context.user_data.get('item_request_message_id')
             if request_msg_id:
@@ -216,23 +203,18 @@ def create_user_message_handler(db: Database):
             box = db.get_box_by_id(box_id)
             items = db.get_items_by_box(box_id)
 
-            # Сначала отправляем меню бокса
+            # Отправляем меню бокса
             await update.message.reply_text(
                 format_box_text(box, len(items)),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
 
-            # Затем отправляем подтверждение и удаляем его в фоне
-            confirm_msg = await update.message.reply_text(f'✅ Бокс переименован!')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                update.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
-
-            await delete_user_message(update)
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify_success(
+                chat_id=update.effective_chat.id,
+                action='Бокс переименован',
+            )
 
             request_msg_id = context.user_data.get('edit_box_request_message_id')
             if request_msg_id:
@@ -254,23 +236,18 @@ def create_user_message_handler(db: Database):
             item = db.get_item_by_id(item_id)
             box = db.get_box_by_id(item.box_id)
 
-            # Сначала отправляем клавиатуру предмета
+            # Отправляем клавиатуру предмета
             await update.message.reply_text(
                 format_item_text(item, box),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
 
-            # Затем отправляем подтверждение и удаляем его в фоне
-            confirm_msg = await update.message.reply_text('✅ Предмет переименован!')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                update.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
-
-            await delete_user_message(update)
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify_success(
+                chat_id=update.effective_chat.id,
+                action='Предмет переименован',
+            )
 
             request_msg_id = context.user_data.get('edit_item_request_message_id')
             if request_msg_id:
@@ -296,23 +273,18 @@ def create_user_message_handler(db: Database):
             item = db.get_item_by_id(item_id)
             box = db.get_box_by_id(item.box_id)
 
-            # Сначала отправляем клавиатуру предмета
+            # Отправляем клавиатуру предмета
             await update.message.reply_text(
                 format_item_text(item, box),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
 
-            # Затем отправляем подтверждение и удаляем его в фоне
-            confirm_msg = await update.message.reply_text('✅ Комментарий сохранён!')
-            asyncio.create_task(delete_message_background(
-                context.bot,
-                update.message.chat_id,
-                confirm_msg.message_id,
-                delay=3
-            ))
-
-            await delete_user_message(update)
+            # Отправляем подтверждение через сервис уведомлений
+            await notification_service.notify_success(
+                chat_id=update.effective_chat.id,
+                action='Комментарий сохранён',
+            )
 
             request_msg_id = context.user_data.get('edit_item_comment_request_message_id')
             if request_msg_id:
