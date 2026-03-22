@@ -10,6 +10,7 @@ from keyboards import get_main_menu_keyboard, get_boxes_keyboard
 from messages import format_welcome_text, format_items_list, format_box_already_exists
 from helpers import check_authorization
 from services.notification import NotificationService
+from dto import BoxDto
 import asyncio
 
 
@@ -115,13 +116,13 @@ def create_list_handler(db: Database, notification_service: NotificationService 
             await update.message.reply_text('❌ Доступ запрещён')
             return
 
-        boxes = db.get_all_boxes()
+        boxes = db.get_all_boxes_dto()
 
         if not boxes:
             await update.message.reply_text('📭 Нет созданных боксов')
             return
 
-        await update.message.reply_text(format_items_list(boxes, db))
+        await update.message.reply_text(format_items_list(boxes))
 
     return CommandHandler('list', list_items)
 
@@ -159,7 +160,7 @@ def create_box_handler(db: Database, notification_service: NotificationService =
             await update.message.reply_text('❌ Доступ запрещён')
             return
 
-        boxes = db.get_all_boxes()
+        boxes = db.get_all_boxes_dto()
 
         if not boxes:
             await update.message.reply_text(
@@ -167,11 +168,9 @@ def create_box_handler(db: Database, notification_service: NotificationService =
             )
             return
 
-        items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes}
-
         await update.message.reply_text(
             '📦 Выберите бокс для управления:',
-            reply_markup=get_boxes_keyboard(boxes, items_counts, show_main_menu=False)
+            reply_markup=get_boxes_keyboard(boxes, show_main_menu=False)
         )
 
     return CommandHandler('box', box_menu)

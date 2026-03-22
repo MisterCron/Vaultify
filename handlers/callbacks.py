@@ -33,6 +33,7 @@ from keyboards import (
 from messages import format_box_text, format_item_text, format_items_list, format_delete_box_warning
 from helpers import edit_safe
 from services.notification import NotificationService
+from dto import BoxDto, ItemDto
 import logging
 from datetime import datetime
 
@@ -63,21 +64,20 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
 
         # Меню - Боксы
         if data == MENU_BOX:
-            boxes = db.get_all_boxes()
-            items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes} if boxes else {}
+            boxes = db.get_all_boxes_dto()
             await edit_safe(
                 query,
                 '📦 Выберите бокс для управления:',
-                reply_markup=get_boxes_keyboard(boxes, items_counts)
+                reply_markup=get_boxes_keyboard(boxes)
             )
 
         # Меню - Список предметов
         elif data == MENU_LIST:
-            boxes = db.get_all_boxes()
+            boxes = db.get_all_boxes_dto()
             if boxes:
                 await edit_safe(
                     query,
-                    format_items_list(boxes, db),
+                    format_items_list(boxes),
                     reply_markup=get_main_menu_back_keyboard()
                 )
             else:
@@ -106,12 +106,11 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
 
         # Список боксов
         elif data == BACK_TO_BOXES:
-            boxes = db.get_all_boxes()
-            items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes}
+            boxes = db.get_all_boxes_dto()
             await edit_safe(
                 query,
                 '📦 Выберите бокс для управления:',
-                reply_markup=get_boxes_keyboard(boxes, items_counts)
+                reply_markup=get_boxes_keyboard(boxes)
             )
 
         # Создание бокса
@@ -165,12 +164,11 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
                 safe_item_name = item_name.replace('<', '&lt;').replace('>', '&gt;')
 
                 # Возвращаемся к меню боксов
-                boxes = db.get_all_boxes()
-                items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes} if boxes else {}
+                boxes = db.get_all_boxes_dto()
                 await edit_safe(
                     query,
                     '📦 Выберите бокс для управления:',
-                    reply_markup=get_boxes_keyboard(boxes, items_counts)
+                    reply_markup=get_boxes_keyboard(boxes)
                 )
 
                 # Отправляем подтверждение через сервис уведомлений
@@ -193,12 +191,12 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         # Просмотр бокса
         elif data.startswith('box_'):
             box_id = data.split('_', 1)[1]
-            box = db.get_box_by_id(box_id)
-            items = db.get_items_by_box(box_id)
+            box = db.get_box_dto_by_id(box_id)
+            items = db.get_items_by_box_dto(box_id, box.name if box else "")
 
             await edit_safe(
                 query,
-                format_box_text(box, len(items)),
+                format_box_text(box, box.items_count),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
@@ -206,12 +204,12 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         # Просмотр предмета
         elif data.startswith('item_'):
             item_id = data.split('_', 1)[1]
-            item = db.get_item_by_id(item_id)
-            box = db.get_box_by_id(item.box_id)
+            item = db.get_item_dto_by_id(item_id)
+            box = db.get_box_dto_by_id(item.box_id)
 
             await edit_safe(
                 query,
-                format_item_text(item, box),
+                format_item_text(item),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
@@ -293,13 +291,13 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
             db.delete_item(item_id)
 
             # Возвращаемся к боксу
-            box = db.get_box_by_id(box_id)
-            items = db.get_items_by_box(box_id)
+            box = db.get_box_dto_by_id(box_id)
+            items = db.get_items_by_box_dto(box_id, box.name if box else "")
 
             # Редактируем сообщение с клавиатурой бокса
             await edit_safe(
                 query,
-                format_box_text(box, len(items)),
+                format_box_text(box, box.items_count),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
@@ -344,14 +342,13 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
             db.delete_box(box_id)
 
             # Возвращаемся к списку боксов
-            boxes = db.get_all_boxes()
-            items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes} if boxes else {}
+            boxes = db.get_all_boxes_dto()
 
             # Редактируем сообщение с клавиатурой списка боксов
             await edit_safe(
                 query,
                 '📦 Выберите бокс для управления:',
-                reply_markup=get_boxes_keyboard(boxes, items_counts)
+                reply_markup=get_boxes_keyboard(boxes)
             )
 
             # Отправляем подтверждение через сервис уведомлений
@@ -364,11 +361,11 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         elif data == CANCEL_EDIT_BOX:
             box_id = context.user_data.get('edit_box_id')
             if box_id:
-                box = db.get_box_by_id(box_id)
-                items = db.get_items_by_box(box_id)
+                box = db.get_box_dto_by_id(box_id)
+                items = db.get_items_by_box_dto(box_id, box.name if box else "")
                 await edit_safe(
                     query,
-                    format_box_text(box, len(items)),
+                    format_box_text(box, box.items_count),
                     reply_markup=get_box_view_keyboard(box, items),
                     parse_mode='HTML'
                 )
@@ -380,22 +377,22 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         elif data == CANCEL_EDIT_ITEM:
             item_id = context.user_data.get('edit_item_id')
             if item_id:
-                item = db.get_item_by_id(item_id)
-                box = db.get_box_by_id(item.box_id)
+                item = db.get_item_dto_by_id(item_id)
+                box = db.get_box_dto_by_id(item.box_id)
                 await edit_safe(
                     query,
-                    format_item_text(item, box),
+                    format_item_text(item),
                     reply_markup=get_item_keyboard(item, box),
                     parse_mode='HTML'
                 )
             else:
                 box_id = context.user_data.get('edit_item_box_id')
                 if box_id:
-                    box = db.get_box_by_id(box_id)
-                    items = db.get_items_by_box(box_id)
+                    box = db.get_box_dto_by_id(box_id)
+                    items = db.get_items_by_box_dto(box_id, box.name if box else "")
                     await edit_safe(
                         query,
-                        format_box_text(box, len(items)),
+                        format_box_text(box, box.items_count),
                         reply_markup=get_box_view_keyboard(box, items),
                         parse_mode='HTML'
                     )
@@ -407,7 +404,7 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         # Удаление комментария предмета
         elif data.startswith(DELETE_ITEM_COMMENT_PREFIX):
             item_id = data.replace('delete_item_comment_', '', 1)
-            item = db.get_item_by_id(item_id)
+            item = db.get_item_dto_by_id(item_id)
 
             if not item:
                 await edit_safe(query, f'❌ Предмет не найден (id={item_id})')
@@ -416,13 +413,13 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
             db.update_item(item_id=item_id, comment='')
 
             # Получаем обновлённый предмет
-            item = db.get_item_by_id(item_id)
-            box = db.get_box_by_id(item.box_id)
+            item = db.get_item_dto_by_id(item_id)
+            box = db.get_box_dto_by_id(item.box_id)
 
             # Редактируем сообщение с меню предмета
             await edit_safe(
                 query,
-                format_item_text(item, box),
+                format_item_text(item),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
@@ -441,22 +438,22 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         elif data == CANCEL_EDIT_ITEM_COMMENT:
             item_id = context.user_data.get('edit_item_comment_id')
             if item_id:
-                item = db.get_item_by_id(item_id)
-                box = db.get_box_by_id(item.box_id)
+                item = db.get_item_dto_by_id(item_id)
+                box = db.get_box_dto_by_id(item.box_id)
                 await edit_safe(
                     query,
-                    format_item_text(item, box),
+                    format_item_text(item),
                     reply_markup=get_item_keyboard(item, box),
                     parse_mode='HTML'
                 )
             else:
                 box_id = context.user_data.get('edit_item_box_id')
                 if box_id:
-                    box = db.get_box_by_id(box_id)
-                    items = db.get_items_by_box(box_id)
+                    box = db.get_box_dto_by_id(box_id)
+                    items = db.get_items_by_box_dto(box_id, box.name if box else "")
                     await edit_safe(
                         query,
-                        format_box_text(box, len(items)),
+                        format_box_text(box, box.items_count),
                         reply_markup=get_box_view_keyboard(box, items),
                         parse_mode='HTML'
                     )
@@ -480,11 +477,11 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
         elif data == CANCEL_ADD_ITEM_TO_BOX:
             box_id = context.user_data.get('add_item_box_id')
             if box_id:
-                box = db.get_box_by_id(box_id)
-                items = db.get_items_by_box(box_id)
+                box = db.get_box_dto_by_id(box_id)
+                items = db.get_items_by_box_dto(box_id, box.name if box else "")
                 await edit_safe(
                     query,
-                    format_box_text(box, len(items)),
+                    format_box_text(box, box.items_count),
                     reply_markup=get_box_view_keyboard(box, items),
                     parse_mode='HTML'
                 )

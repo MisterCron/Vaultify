@@ -13,6 +13,7 @@ from constants import (
     CANCEL_EDIT_ITEM, CANCEL_EDIT_ITEM_COMMENT,
     DELETE_ITEM_PREFIX, DELETE_ITEM_CONFIRM_PREFIX, DELETE_ITEM_COMMENT_PREFIX,
 )
+from dto import BoxDto, ItemDto
 
 
 def get_main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -25,42 +26,43 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_boxes_keyboard(boxes, items_counts=None, show_main_menu: bool = True) -> InlineKeyboardMarkup:
+def get_boxes_keyboard(
+    boxes: list[BoxDto],
+    show_main_menu: bool = True
+) -> InlineKeyboardMarkup:
     """Клавиатура списка боксов
-    
+
     Args:
-        boxes: Список боксов
-        items_counts: Словарь {box_id: count} с количеством предметов (опционально)
+        boxes: Список DTO боксов
         show_main_menu: Показывать ли кнопку главного меню
     """
     keyboard = []
     for box in boxes:
-        items_count = items_counts.get(box.id, 0) if items_counts else 0
         keyboard.append([
             InlineKeyboardButton(
-                f'📦 {box.name} ({items_count})',
+                f'📦 {box.name} ({box.items_count})',
                 callback_data=f'box_{box.id}'
             )
         ])
-    
+
     keyboard.append([InlineKeyboardButton('➕ Создать бокс', callback_data=CREATE_BOX)])
-    
+
     if show_main_menu:
         keyboard.append([InlineKeyboardButton('📋 Главное меню', callback_data=MENU_MAIN)])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_box_view_keyboard(box, items) -> InlineKeyboardMarkup:
+def get_box_view_keyboard(box: BoxDto, items: list[ItemDto]) -> InlineKeyboardMarkup:
     """Клавиатура просмотра бокса"""
     keyboard = []
-    
+
     # Кнопки предметов
     for item in items:
         keyboard.append([
             InlineKeyboardButton(item.name, callback_data=f'item_{item.id}')
         ])
-    
+
     # Кнопки управления
     keyboard.append([
         InlineKeyboardButton('➕ Добавить предмет', callback_data=f'{ADD_ITEM_TO_BOX_PREFIX}{box.id}')
@@ -70,11 +72,11 @@ def get_box_view_keyboard(box, items) -> InlineKeyboardMarkup:
         InlineKeyboardButton('🗑️ Удалить', callback_data=f'{DELETE_BOX_PREFIX}{box.id}')
     ])
     keyboard.append([InlineKeyboardButton('⬅️ Назад', callback_data=BACK_TO_BOXES)])
-    
+
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_item_keyboard(item, box) -> InlineKeyboardMarkup:
+def get_item_keyboard(item: ItemDto, box: BoxDto) -> InlineKeyboardMarkup:
     """Клавиатура просмотра предмета"""
     keyboard = [
         [

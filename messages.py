@@ -1,30 +1,41 @@
 """
 Форматирование сообщений для бота
 """
+from dto import BoxDto, ItemDto, SearchResult
 
 
-def format_box_text(box, items_count: int) -> str:
-    """Форматирование информации о боксе"""
+def format_box_text(box: BoxDto, items_count: int | None = None) -> str:
+    """Форматирование информации о боксе
+    
+    Args:
+        box: DTO бокса
+        items_count: Количество предметов (если None, берётся из box.items_count)
+    """
     # Экранируем HTML символы
     name = box.name.replace('<', '&lt;').replace('>', '&gt;')
     comment = box.comment.replace('<', '&lt;').replace('>', '&gt;') if box.comment else ''
-    
+    count = items_count if items_count is not None else box.items_count
+
     text = f'📦 <b>{name}</b>\n'
     if comment:
         text += f'Комментарий: {comment}\n'
-    text += f'\nПредметов: {items_count}\n'
+    text += f'\nПредметов: {count}\n'
     return text
 
 
-def format_item_text(item, box) -> str:
-    """Форматирование информации о предмете"""
+def format_item_text(item: ItemDto) -> str:
+    """Форматирование информации о предмете
+    
+    Args:
+        item: DTO предмета
+    """
     # Экранируем HTML символы
     name = item.name.replace('<', '&lt;').replace('>', '&gt;')
     comment = item.comment.replace('<', '&lt;').replace('>', '&gt;') if item.comment else ''
     created_by = item.created_by.replace('<', '&lt;').replace('>', '&gt;') if item.created_by else ''
-    
+
     text = f'📌 <b>{name}</b>\n'
-    text += f'Бокс: {box.name}\n'
+    text += f'Бокс: {item.box_name}\n'
     if comment:
         text += f'Комментарий: {comment}\n'
     else:
@@ -34,43 +45,45 @@ def format_item_text(item, box) -> str:
     return text
 
 
-def format_items_list(boxes, db=None) -> str:
+def format_items_list(boxes: list[BoxDto], items_counts: dict[str, int] | None = None) -> str:
     """Форматирование списка всех предметов по боксам
-    
+
     Args:
-        boxes: Список боксов
-        db: Экземпляр Database для получения предметов (опционально)
+        boxes: Список DTO боксов
+        items_counts: Словарь {box_id: count} с количеством предметов (опционально)
     """
     text = '📦 Все предметы по боксам:\n\n'
     for box in boxes:
-        items = db.get_items_by_box(box.id) if db else []
+        count = items_counts.get(box.id, 0) if items_counts else box.items_count
         text += f'🗂️ {box.name}\n'
-        if items:
-            for item in items:
-                text += f'   {item.name}\n'
+        if count > 0:
+            text += f'   ({count} предметов)\n'
         else:
             text += '   (пусто)\n'
         text += '\n'
     return text
 
 
-def format_search_results(items, db) -> str:
-    """Форматирование результатов поиска"""
-    text = f'🔍 Найдено предметов: {len(items)}\n'
-    for item in items:
-        box = db.get_box_by_id(item.box_id)
+def format_search_results(result: SearchResult) -> str:
+    """Форматирование результатов поиска
+    
+    Args:
+        result: SearchResult DTO
+    """
+    text = f'🔍 Найдено предметов: {result.total}\n'
+    for item in result.items:
         if item.comment:
             text += f'🔧 {item.name} ({item.comment})\n'
         else:
             text += f'🔧 {item.name}\n'
-        text += f'   📦 Бокс: {box.name}\n\n'
+        text += f'   📦 Бокс: {item.box_name}\n\n'
     return text
 
 
 def format_welcome_text() -> str:
     """Текст приветственного сообщения"""
     return """
-👋 Добро пожаловать в Inventory Bot!
+👋 Добро пожаловать в Vaultify!
 
 📋 Основные команды:
 

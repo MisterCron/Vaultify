@@ -11,11 +11,11 @@ from messages import (
     format_item_text,
     format_search_results,
     format_not_found,
-    format_item_already_exists,
     format_box_already_exists,
 )
 from helpers import check_authorization
 from services.notification import NotificationService
+from dto import BoxDto, ItemDto
 import asyncio
 from datetime import datetime
 import logging
@@ -63,9 +63,9 @@ def create_user_message_handler(db: Database, notification_service: Notification
         # Поиск предмета из меню
         if context.user_data.get('awaiting_menu_find'):
             try:
-                items = db.search_items(text)
+                result = db.search_items_dto(text)
 
-                if not items:
+                if result.is_empty():
                     # Отправляем сообщение об ошибке
                     await notification_service.notify(
                         chat_id=update.effective_chat.id,
@@ -75,7 +75,7 @@ def create_user_message_handler(db: Database, notification_service: Notification
                     return
 
                 await update.message.reply_text(
-                    format_search_results(items, db),
+                    format_search_results(result),
                     reply_markup=get_main_menu_back_keyboard()
                 )
                 context.user_data['awaiting_menu_find'] = False
@@ -101,13 +101,12 @@ def create_user_message_handler(db: Database, notification_service: Notification
 
             db.create_box(name=name)
 
-            boxes = db.get_all_boxes()
-            items_counts = {box.id: len(db.get_items_by_box(box.id)) for box in boxes}
+            boxes = db.get_all_boxes_dto()
 
             # Отправляем список боксов
             await update.message.reply_text(
                 '📦 Выберите бокс для управления:',
-                reply_markup=get_boxes_keyboard(boxes, items_counts)
+                reply_markup=get_boxes_keyboard(boxes)
             )
 
             # Отправляем подтверждение через сервис уведомлений
@@ -165,14 +164,15 @@ def create_user_message_handler(db: Database, notification_service: Notification
 
             db.create_item(name=item_name, box_id=box_id, created_by=created_by)
 
-            items = db.get_items_by_box(box_id)
+            box = db.get_box_dto_by_id(box_id)
+            items = db.get_items_by_box_dto(box_id, box.name)
 
             # Экранируем HTML символы в названии предмета
             safe_item_name = item_name.replace('<', '&lt;').replace('>', '&gt;')
 
             # Отправляем меню бокса
             await update.message.reply_text(
-                format_box_text(box, len(items)),
+                format_box_text(box, box.items_count),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
@@ -200,12 +200,12 @@ def create_user_message_handler(db: Database, notification_service: Notification
             box_id = context.user_data.get('edit_box_id')
             db.update_box(box_id=box_id, name=text)
 
-            box = db.get_box_by_id(box_id)
-            items = db.get_items_by_box(box_id)
+            box = db.get_box_dto_by_id(box_id)
+            items = db.get_items_by_box_dto(box_id, box.name)
 
             # Отправляем меню бокса
             await update.message.reply_text(
-                format_box_text(box, len(items)),
+                format_box_text(box, box.items_count),
                 reply_markup=get_box_view_keyboard(box, items),
                 parse_mode='HTML'
             )
@@ -233,12 +233,12 @@ def create_user_message_handler(db: Database, notification_service: Notification
             item_id = context.user_data.get('edit_item_id')
             db.update_item(item_id=item_id, name=text)
 
-            item = db.get_item_by_id(item_id)
-            box = db.get_box_by_id(item.box_id)
+            item = db.get_item_dto_by_id(item_id)
+            box = db.get_box_dto_by_id(item.box_id)
 
             # Отправляем клавиатуру предмета
             await update.message.reply_text(
-                format_item_text(item, box),
+                format_item_text(item),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
@@ -270,12 +270,12 @@ def create_user_message_handler(db: Database, notification_service: Notification
             comment = text.strip()
             db.update_item(item_id=item_id, comment=comment)
 
-            item = db.get_item_by_id(item_id)
-            box = db.get_box_by_id(item.box_id)
+            item = db.get_item_dto_by_id(item_id)
+            box = db.get_box_dto_by_id(item.box_id)
 
             # Отправляем клавиатуру предмета
             await update.message.reply_text(
-                format_item_text(item, box),
+                format_item_text(item),
                 reply_markup=get_item_keyboard(item, box),
                 parse_mode='HTML'
             )
