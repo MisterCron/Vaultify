@@ -45,21 +45,25 @@ def format_item_text(item: ItemDto) -> str:
     return text
 
 
-def format_items_list(boxes: list[BoxDto], items_counts: dict[str, int] | None = None) -> str:
+def format_items_list(boxes: list[BoxDto], db=None) -> str:
     """Форматирование списка всех предметов по боксам
 
     Args:
         boxes: Список DTO боксов
-        items_counts: Словарь {box_id: count} с количеством предметов (опционально)
+        db: Экземпляр Database для получения предметов (опционально)
     """
     text = '📦 Все предметы по боксам:\n\n'
     for box in boxes:
-        count = items_counts.get(box.id, 0) if items_counts else box.items_count
         text += f'🗂️ {box.name}\n'
-        if count > 0:
-            text += f'   ({count} предметов)\n'
+        if db and box.items_count > 0:
+            items = db.get_items_by_box(box.id)
+            if items:
+                for item in items:
+                    text += f'   📌 {item.name}\n'
+            else:
+                text += '   (пусто)\n'
         else:
-            text += '   (пусто)\n'
+            text += f'   ({box.items_count} предметов)\n'
         text += '\n'
     return text
 

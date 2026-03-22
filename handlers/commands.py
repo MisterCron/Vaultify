@@ -122,7 +122,7 @@ def create_list_handler(db: Database, notification_service: NotificationService 
             await update.message.reply_text('📭 Нет созданных боксов')
             return
 
-        await update.message.reply_text(format_items_list(boxes))
+        await update.message.reply_text(format_items_list(boxes, db))
 
     return CommandHandler('list', list_items)
 

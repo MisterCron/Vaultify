@@ -77,7 +77,7 @@ def create_callback_handler(db: Database, notification_service: NotificationServ
             if boxes:
                 await edit_safe(
                     query,
-                    format_items_list(boxes),
+                    format_items_list(boxes, db),
                     reply_markup=get_main_menu_back_keyboard()
                 )
             else:
