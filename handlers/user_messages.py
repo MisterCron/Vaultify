@@ -315,10 +315,6 @@ def create_user_message_handler(db: Database, notification_service: Notification
             return
 
         # Все остальные сообщения пользователя - удаляем через 5 секунд
-        await asyncio.sleep(5)
-        try:
-            await update.message.delete()
-        except:
-            pass
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler)

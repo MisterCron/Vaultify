@@ -26,6 +26,8 @@ def create_start_handler(db: Database, notification_service: NotificationService
             reply_markup=get_main_menu_keyboard()
         )
 
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
+
     return CommandHandler('start', start)
 
 
@@ -40,6 +42,8 @@ def create_menu_handler(db: Database, notification_service: NotificationService 
             '📋 Главное меню:',
             reply_markup=get_main_menu_keyboard()
         )
+
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return CommandHandler('menu', menu)
 
