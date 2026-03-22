@@ -1,0 +1,11 @@
+services:
+  vaultify:
+    build: .
+    container_name: vaultify_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATABASE_URL=sqlite:////app/data/vaultify.db
