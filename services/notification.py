@@ -191,3 +191,18 @@ class NotificationService:
             text=f'❌ {error}',
             auto_delete=auto_delete,
         )
+    
+    async def delete_message(self, message: Message, delay: int = 5):
+        """
+        Удаление сообщения через заданный интервал
+        
+        Args:
+            message: Сообщение для удаления
+            delay: Задержка в секундах перед удалением
+        """
+        await asyncio.sleep(delay)
+        try:
+            await message.delete()
+            logger.debug(f"Сообщение {message.message_id} удалено через {delay} сек")
+        except Exception as e:
+            logger.debug(f"Не удалось удалить сообщение {message.message_id}: {e}")

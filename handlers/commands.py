@@ -55,6 +55,7 @@ def create_add_handler(db: Database, notification_service: NotificationService =
             await update.message.reply_text(
                 '❌ Неверный формат.\nИспользуйте: /add <название>\n\nПример: /add Молоток'
             )
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         item_name = ' '.join(context.args)
@@ -67,6 +68,7 @@ def create_add_handler(db: Database, notification_service: NotificationService =
                 '📦 Нет созданных боксов.\nСначала создайте бокс через /newbox'
             )
             context.user_data['awaiting_box_select'] = False
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         keyboard = []
@@ -81,6 +83,8 @@ def create_add_handler(db: Database, notification_service: NotificationService =
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
+
     return CommandHandler('add', add)
 
 
@@ -93,6 +97,7 @@ def create_find_handler(db: Database, notification_service: NotificationService 
 
         if not context.args:
             await update.message.reply_text('❌ Укажите название для поиска.\nПример: /find молоток')
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         from messages import format_not_found, format_search_results
@@ -102,9 +107,11 @@ def create_find_handler(db: Database, notification_service: NotificationService 
 
         if not items:
             await update.message.reply_text(format_not_found(query))
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         await update.message.reply_text(format_search_results(items, db))
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return CommandHandler('find', find)
 
@@ -123,6 +130,7 @@ def create_list_handler(db: Database, notification_service: NotificationService 
             return
 
         await update.message.reply_text(format_items_list(boxes))
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return CommandHandler('list', list_items)
 
@@ -138,6 +146,7 @@ def create_newbox_handler(db: Database, notification_service: NotificationServic
             await update.message.reply_text(
                 '❌ Неверный формат.\nИспользуйте: /newbox <название>\n\nПример: /newbox Инструменты'
             )
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         name = ' '.join(context.args)
@@ -145,10 +154,12 @@ def create_newbox_handler(db: Database, notification_service: NotificationServic
         existing = db.get_box_by_name(name)
         if existing:
             await update.message.reply_text(format_box_already_exists(name))
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             return
 
         db.create_box(name=name)
         await update.message.reply_text(f'✅ Бокс "{name}" создан!')
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return CommandHandler('newbox', newbox)
 
@@ -172,5 +183,6 @@ def create_box_handler(db: Database, notification_service: NotificationService =
             '📦 Выберите бокс для управления:',
             reply_markup=get_boxes_keyboard(boxes, show_main_menu=False)
         )
+        asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
     return CommandHandler('box', box_menu)

@@ -97,6 +97,7 @@ def create_user_message_handler(db: Database, notification_service: Notification
                     chat_id=update.effective_chat.id,
                     error=format_box_already_exists(name),
                 )
+                asyncio.create_task(notification_service.delete_message(update.message, delay=5))
                 return
 
             db.create_box(name=name)
@@ -115,6 +116,8 @@ def create_user_message_handler(db: Database, notification_service: Notification
                 action=f'Бокс "{name}" создан',
             )
 
+            # Удаляем сообщение пользователя
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
             context.user_data['awaiting_box_create'] = False
             return
 
@@ -183,6 +186,9 @@ def create_user_message_handler(db: Database, notification_service: Notification
                 action=f'Предмет "{safe_item_name}" добавлен',
             )
 
+            # Удаляем сообщение пользователя
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
+
             request_msg_id = context.user_data.get('item_request_message_id')
             if request_msg_id:
                 try:
@@ -216,6 +222,9 @@ def create_user_message_handler(db: Database, notification_service: Notification
                 action='Бокс переименован',
             )
 
+            # Удаляем сообщение пользователя
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
+
             request_msg_id = context.user_data.get('edit_box_request_message_id')
             if request_msg_id:
                 try:
@@ -248,6 +257,9 @@ def create_user_message_handler(db: Database, notification_service: Notification
                 chat_id=update.effective_chat.id,
                 action='Предмет переименован',
             )
+
+            # Удаляем сообщение пользователя
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
             request_msg_id = context.user_data.get('edit_item_request_message_id')
             if request_msg_id:
@@ -285,6 +297,9 @@ def create_user_message_handler(db: Database, notification_service: Notification
                 chat_id=update.effective_chat.id,
                 action='Комментарий сохранён',
             )
+
+            # Удаляем сообщение пользователя
+            asyncio.create_task(notification_service.delete_message(update.message, delay=5))
 
             request_msg_id = context.user_data.get('edit_item_comment_request_message_id')
             if request_msg_id:
