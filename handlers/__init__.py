@@ -9,6 +9,7 @@ from .commands import (
     create_list_handler,
     create_newbox_handler,
     create_box_handler,
+    create_backup_handler,
 )
 from .callbacks import create_callback_handler
 from .user_messages import create_user_message_handler
@@ -25,6 +26,7 @@ def register_handlers(application, db, notification_service: NotificationService
     application.add_handler(create_list_handler(db, notification_service))
     application.add_handler(create_newbox_handler(db, notification_service))
     application.add_handler(create_box_handler(db, notification_service))
+    application.add_handler(create_backup_handler(db, notification_service))
     application.add_handler(create_callback_handler(db, notification_service))
     application.add_handler(create_user_message_handler(db, notification_service))
     application.add_handler(create_cancel_handler(db, notification_service))

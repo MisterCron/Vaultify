@@ -12,6 +12,12 @@ from helpers import check_authorization
 from services.notification import NotificationService
 from dto import BoxDto
 import asyncio
+import shutil
+import os
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def create_start_handler(db: Database, notification_service: NotificationService = None):
@@ -21,9 +27,18 @@ def create_start_handler(db: Database, notification_service: NotificationService
             await update.message.reply_text('❌ Доступ запрещён')
             return
 
+        user_id = update.effective_user.id
+        is_admin = str(user_id) == str(Config.BOT_DEV_ID)
+
+        # Формируем текст приветствия
+        welcome_text = format_welcome_text()
+        if is_admin:
+            welcome_text += '\n\n🔧 <b>Администратор:</b> Используйте /backup для создания бекапа БД'
+
         await update.message.reply_text(
-            format_welcome_text(),
-            reply_markup=get_main_menu_keyboard()
+            welcome_text,
+            reply_markup=get_main_menu_keyboard(),
+            parse_mode='HTML'
         )
 
     return CommandHandler('start', start)
@@ -174,3 +189,64 @@ def create_box_handler(db: Database, notification_service: NotificationService =
         )
 
     return CommandHandler('box', box_menu)
+
+
+def create_backup_handler(db: Database, notification_service: NotificationService = None):
+    """Обработчик команды /backup для создания бекапа базы данных"""
+    async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        # Проверка прав администратора
+        user_id = update.effective_user.id
+        if str(user_id) != str(Config.BOT_DEV_ID):
+            await update.message.reply_text('❌ Эта команда доступна только администратору')
+            return
+
+        try:
+            await update.message.reply_text('⏳ Создание бекапа базы данных...')
+
+            # Получаем путь к базе данных из конфигурации
+            db_url = Config.DATABASE_URL
+            
+            # Обрабатываем SQLite URL (формат: sqlite:///path/to/db.sqlite)
+            if db_url.startswith('sqlite:///'):
+                db_path = db_url.replace('sqlite:///', '')
+                # Для абсолютных путей в Unix (начинаются с /)
+                if not os.path.isabs(db_path):
+                    db_path = os.path.abspath(db_path)
+                
+                if not os.path.exists(db_path):
+                    await update.message.reply_text('❌ Файл базы данных не найден')
+                    return
+
+                # Создаём временную копию базы данных
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                backup_filename = f'vaultify_backup_{timestamp}.db'
+                backup_path = os.path.join('/tmp', backup_filename)
+                
+                # Копируем файл базы данных
+                shutil.copy2(db_path, backup_path)
+                
+                # Отправляем файл пользователю
+                with open(backup_path, 'rb') as db_file:
+                    await update.message.reply_document(
+                        document=db_file,
+                        filename=backup_filename,
+                        caption=f'✅ Бекап базы данных создан\n📅 Дата: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n📦 Размер: {os.path.getsize(backup_path) / 1024:.2f} КБ'
+                    )
+                
+                # Удаляем временный файл
+                os.remove(backup_path)
+                
+                logger.info(f'Бекап создан: {backup_filename} пользователем {user_id}')
+                
+            else:
+                # Для других типов БД (PostgreSQL и т.д.)
+                await update.message.reply_text(
+                    '❌ Бекап поддерживается только для SQLite баз данных.\n'
+                    f'Текущий тип БД: {db_url.split(":")[0]}'
+                )
+
+        except Exception as e:
+            logger.error(f'Ошибка при создании бекапа: {e}')
+            await update.message.reply_text(f'❌ Ошибка при создании бекапа: {str(e)}')
+
+    return CommandHandler('backup', backup)

@@ -8,6 +8,9 @@ MENU_LIST = 'menu_list'
 MENU_FIND = 'menu_find'
 MENU_MAIN = 'menu_main'
 
+# Админ
+BACKUP_DB = 'backup_db'
+
 # Боксы
 BACK_TO_BOXES = 'back_to_boxes'
 CREATE_BOX = 'create_box'
